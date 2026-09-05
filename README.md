@@ -44,8 +44,13 @@ payments) is persisted in the browser via `localStorage`.
 ### Dashboard (protected)
 - **Overview** — 4 computed KPI cards + an 8-week trend chart and recent posts
 - **Content** — full CRUD table: create, edit, delete, search, sort, filter, pagination,
-  CSV export, plus a built-in AI caption generator and one-tap social publishing with
-  step-by-step progress and realistic engagement stats
+  CSV export, plus a built-in AI caption generator and three publishing actions in the
+  editor: **Save draft**, **Schedule** (auto-publishes at a chosen future time via a
+  background scheduler, Pro) and **Publish now** (posts immediately to the connected
+  account), each with step-by-step progress and realistic engagement stats
+- **Connected social accounts** — in Settings, connect/disconnect each platform
+  (Facebook, Instagram, WhatsApp, TikTok, X) via an authorization flow; publishing
+  requires the target account to be connected
 - **Analytics** — reach/engagement aggregates, platform comparison, status donut,
   empty states when there is no data
 - **Billing** — current plan & price, upgrade path, receipts, cancellation

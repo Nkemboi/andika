@@ -435,22 +435,28 @@
         <div class="hint" id="genTip"></div>
       </div>
       <div class="field">
-        <label for="fSchedule">Schedule for (optional)</label>
+        <label for="fSchedule">Schedule for (optional · Pro)</label>
         <input class="input" id="fSchedule" type="datetime-local" value="${existing&&existing.scheduledFor?existing.scheduledFor.slice(0,16):''}"/>
+        <div class="hint">Pick a future date &amp; time then press <strong>Schedule</strong> to auto-publish then.
+          Leave empty to <strong>Publish now</strong> or save as a draft.</div>
       </div>
       <div class="form-error-banner" id="recErr" style="display:none"></div>`;
 
     const footer = document.createElement('div');
     footer.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;width:100%';
     footer.innerHTML = `
-      <button type="button" class="btn btn-ghost" id="mGen" style="margin-right:auto">${I.sparkles} ${isEdit?'Regenerate':'Generate'} caption</button>
+      <button type="button" class="btn btn-ghost" id="mGen" style="margin-right:auto">${I.sparkles} ${isEdit?'Regenerate':'Generate'}</button>
       <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
-      <button type="button" class="btn btn-primary" id="mSave">${isEdit?'Save changes':'Save post'}</button>`;
+      <button type="button" class="btn btn-ghost" id="mDraft">${I.file} Save draft</button>
+      <button type="button" class="btn btn-ghost" id="mSchedule">${I.calendar} Schedule</button>
+      <button type="button" class="btn btn-primary" id="mPublish">${I.rocket} Publish now</button>`;
 
     const modal = App.openModal({ title: isEdit?'Edit content':'Create content', body, footer, size:'lg' });
-    let platform = existing ? existing.platform : (user.settings.defaultPlatform||'instagram');
+    let platform = existing ? existing.platform : (live.settings.defaultPlatform||'instagram');
     const genBtn = modal.el.querySelector('#mGen');
-    const saveBtn = modal.el.querySelector('#mSave');
+    const draftBtn = modal.el.querySelector('#mDraft');
+    const schedBtn = modal.el.querySelector('#mSchedule');
+    const pubBtn = modal.el.querySelector('#mPublish');
 
     body.querySelectorAll('[data-plat]').forEach(b=>b.addEventListener('click', ()=>{
       platform = b.dataset.plat;
@@ -478,29 +484,104 @@
       App.toast('Caption generated! Review before saving.','success');
     });
 
-    saveBtn.addEventListener('click', ()=>{
+    function collectData(){
       const topic = body.querySelector('#fTopic').value.trim();
       const caption = body.querySelector('#fCaption').value.trim();
       const sched = body.querySelector('#fSchedule').value;
       const err = body.querySelector('#recErr');
-      if(!topic){ err.style.display='block'; err.textContent='A title/topic is required for every post.'; return; }
-      if(!caption){ err.style.display='block'; err.textContent='Generate a caption or write one before saving.'; return; }
+      if(!topic){ err.style.display='block'; err.textContent='A title/topic is required for every post.'; return null; }
+      if(!caption){ err.style.display='block'; err.textContent='Generate a caption or write one before saving.'; return null; }
       err.style.display='none';
-      const data = {
-        platform, category: body.querySelector('#fCategory').value,
-        title: topic, caption,
-        scheduledFor: sched ? new Date(sched).toISOString() : null,
-        status: sched ? 'scheduled' : (existing ? existing.status : 'draft')
+      return {
+        platform,
+        category: body.querySelector('#fCategory').value,
+        title: topic,
+        caption,
+        scheduledFor: sched ? new Date(sched).toISOString() : null
       };
+    }
+
+    function persistRecord(data, status){
+      const payload = Object.assign({}, data, {
+        status,
+        scheduledFor: status === 'scheduled' ? data.scheduledFor : null
+      });
       if(isEdit){
-        App.store.updateRecord(existing.id, user.id, data);
-        App.toast('Post updated.','success');
-      } else {
-        App.store.addRecord(Object.assign({ userId: user.id }, data));
-        App.toast('Post saved to your content library.','success');
+        App.store.updateRecord(existing.id, live.id, payload);
+        return existing.id;
       }
+      const rec = App.store.addRecord(Object.assign({ userId: live.id }, payload));
+      return rec.id;
+    }
+
+    // Save as draft
+    draftBtn.addEventListener('click', ()=>{
+      const data = collectData(); if(!data) return;
+      const keepPublished = isEdit && existing.status === 'published';
+      persistRecord(data, keepPublished ? 'published' : 'draft');
+      App.toast('Saved as draft.','success');
+      modal.close(); onSaved && onSaved();
+    });
+
+    // Schedule
+    schedBtn.addEventListener('click', ()=>{
+      const data = collectData(); if(!data) return;
+      const liveUser = App.store.currentUser() || live;
+      if(liveUser.plan !== 'pro'){
+        App.confirm({ title:'Scheduling is a Pro feature',
+          message:'Queue posts to publish automatically at a chosen date and time with Pro — Ksh 1,000/month, paid via M-PESA. Upgrade now?',
+          confirmLabel:'Upgrade to Pro' }).then(ok=>{ if(ok) location.hash = '#/checkout?plan=pro'; });
+        return;
+      }
+      if(!data.scheduledFor || new Date(data.scheduledFor) <= new Date()){
+        const err = body.querySelector('#recErr');
+        err.style.display='block';
+        err.textContent='Pick a future date and time to schedule — or use “Publish now” to post immediately.';
+        return;
+      }
+      persistRecord(data, 'scheduled');
+      App.toast('Scheduled for '+U.fmtDate(data.scheduledFor, true)+'. Andika will publish it automatically.','success');
+      modal.close(); onSaved && onSaved();
+    });
+
+    // Publish now
+    pubBtn.addEventListener('click', ()=>{
+      const data = collectData(); if(!data) return;
+      const liveUser = App.store.currentUser() || live;
+      if(liveUser.plan !== 'pro'){
+        App.confirm({ title:'Posting is a Pro feature',
+          message:'One-tap publishing to Facebook, Instagram, WhatsApp, TikTok and X is included in Pro — Ksh 1,000/month. Upgrade now?',
+          confirmLabel:'Upgrade to Pro' }).then(ok=>{
+            if(!ok) return;
+            persistRecord(data, 'draft'); modal.close(); onSaved && onSaved();
+            location.hash = '#/checkout?plan=pro';
+          });
+        return;
+      }
+      if(!App.store.isConnected(liveUser.id, platform)){
+        persistRecord(data, 'draft'); modal.close(); onSaved && onSaved();
+        const pname = U.platform(platform).name;
+        App.confirm({ title:`Connect ${pname} to post`,
+          message:`Your ${pname} account isn't connected yet. We saved your post as a draft — connect ${pname} in Settings, then publish it.`,
+          confirmLabel:'Connect in Settings' }).then(ok=>{ if(ok) location.hash = '#/dashboard/settings'; });
+        return;
+      }
+      const recId = persistRecord(data, 'draft');
+      const rec = App.store.getRecord(recId, liveUser.id);
       modal.close();
-      onSaved && onSaved();
+      // Defer opening the publisher until the create modal is fully torn down,
+      // and refresh the view only after publishing actually completes.
+      App.toast('Opening publisher…','success');
+      setTimeout(()=>{
+        const cur = App.store.currentUser();
+        const fresh = App.store.getRecord(recId, cur.id) || rec;
+        // stay on the content table and refresh it in place once published
+        openPublishModal(cur, fresh, ()=>{
+          const viewEl = U.qs('#dashView');
+          if(viewEl) renderContent(viewEl, cur);
+          else if(onSaved) onSaved();
+        });
+      }, 120);
     });
   }
 
@@ -562,9 +643,10 @@
     ).then(result=>{
       const last = stepsEl.children[stepsEl.children.length-1];
       if(last){ last.classList.remove('active'); last.classList.add('done'); last.querySelector('.ps-ic').innerHTML = I.check; }
-      // always write against the freshest user (avoid clobbering plan/billing changes)
+      // always write against the freshest user + record (avoid clobbering concurrent changes)
       const freshUser = App.store.currentUser();
-      App.store.updateRecord(record.id, freshUser.id, {
+      const freshRec = App.store.getRecord(record.id, freshUser.id) || record;
+      App.store.updateRecord(freshRec.id, freshUser.id, {
         status:'published', publishedAt: result.publishedAt,
         externalId: result.externalId, stats: result.stats, scheduledFor:null
       });

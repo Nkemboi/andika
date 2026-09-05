@@ -19,6 +19,7 @@ src/js/11-pages-reco-contact.js
 src/js/12-pages-auth.js
 src/js/13-pages-checkout.js
 src/js/14-pages-dashboard.js
+src/js/16-scheduler.js
 src/js/15-main.js
 "
 
@@ -36,7 +37,7 @@ js_files = [
  'src/js/01-utils.js','src/js/02-store.js','src/js/03-generator.js','src/js/04-paybridge.js',
  'src/js/05-social.js','src/js/06-recommend.js','src/js/07-components.js','src/js/08-chrome.js',
  'src/js/09-router.js','src/js/10-pages-marketing.js','src/js/11-pages-reco-contact.js',
- 'src/js/12-pages-auth.js','src/js/13-pages-checkout.js','src/js/14-pages-dashboard.js','src/js/15-main.js'
+ 'src/js/12-pages-auth.js','src/js/13-pages-checkout.js','src/js/14-pages-dashboard.js','src/js/16-scheduler.js','src/js/15-main.js'
 ]
 js = '\n;\n'.join((root/f).read_text() for f in js_files)
 out = tpl.replace('/* __STYLES__ */', css).replace('/* __SCRIPTS__ */', js)
