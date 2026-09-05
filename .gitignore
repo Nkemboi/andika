@@ -1,0 +1,12 @@
+# Dependencies / build output (none required to run — single-file app)
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# Tooling
+.DS_Store
+*.log
+.cache/
+
+# Note: the app is a static single-file build (index.html) with no runtime
+# dependencies. Source lives in src/ and is assembled by build.sh.
