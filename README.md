@@ -126,13 +126,24 @@ npm start                            # = node server/server.js  → http://local
 4. For real money set `DARAJA_ENV=live` and use your production shortcode/passkey.
 
 ### Social posting
-Posts are handed off to the real, connected platform: the caption is copied to the
-clipboard and the platform's composer (web or app deep link) opens pre-addressed to
-the connected handle — WhatsApp (`wa.me`), X (`twitter.com/intent/tweet`),
-Facebook (sharer), Instagram (`instagram.com/<handle>`), and TikTok
-(`tiktok.com/upload`). Instagram and TikTok have no public web-posting API, so
-their app composers are opened directly; Facebook caption prefill requires a
-Facebook app id.
+Tapping **Post to {platform} now** hands the post to the real, connected platform
+— the composer is launched synchronously inside the click so pop-up blockers never
+stop it (if a browser still blocks it, the modal shows an **Open {platform}**
+button that always works):
+
+- **WhatsApp** — `wa.me` chat picker opens with your message **pre-filled**; tap
+  the contact/group and send. On a phone the WhatsApp app opens directly.
+- **X (Twitter)** — `x.com/intent/post` opens with the tweet **pre-filled**; tap
+  Post. App deep link `twitter://post` on mobile.
+- **Facebook** — when `window.FB_APP_ID` is set, the Feed dialog opens with the
+  caption pre-filled; otherwise the share dialog opens and the caption is copied
+  for pasting (Facebook offers no keyless caption pre-fill).
+- **Instagram** — on a phone the app opens straight to the camera/create screen
+  (`instagram://camera`); on desktop your profile/composer opens at
+  `instagram.com/<handle>`. Instagram has no public web-posting API, so the
+  caption is copied for you to paste.
+- **TikTok** — app opens to upload (`snssdk1233://upload`) on mobile;
+  `tiktok.com/upload` on desktop. Caption copied for pasting.
 
 ### Still isolated behind clean interfaces
 - **Google sign-in** — wire `openGoogle()` in `12-pages-auth.js` to Google

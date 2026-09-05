@@ -569,19 +569,16 @@
       const recId = persistRecord(data, 'draft');
       const rec = App.store.getRecord(recId, liveUser.id);
       modal.close();
-      // Defer opening the publisher until the create modal is fully torn down,
-      // and refresh the view only after publishing actually completes.
-      App.toast('Opening publisher…','success');
-      setTimeout(()=>{
-        const cur = App.store.currentUser();
-        const fresh = App.store.getRecord(recId, cur.id) || rec;
-        // stay on the content table and refresh it in place once published
-        openPublishModal(cur, fresh, ()=>{
-          const viewEl = U.qs('#dashView');
-          if(viewEl) renderContent(viewEl, cur);
-          else if(onSaved) onSaved();
-        });
-      }, 120);
+      // Open the publisher synchronously in the same click task — deferring
+      // with setTimeout would lose the user gesture and get the composer
+      // popup blocked. Refresh the content table after publishing.
+      const cur = App.store.currentUser();
+      const fresh = App.store.getRecord(recId, cur.id) || rec;
+      openPublishModal(cur, fresh, ()=>{
+        const viewEl = U.qs('#dashView');
+        if(viewEl) renderContent(viewEl, cur);
+        else if(onSaved) onSaved();
+      });
     });
   }
 
@@ -620,13 +617,27 @@
         </div>
       </div>
       <div class="gen-out" style="margin:12px 0 14px;max-height:140px;overflow:auto">${esc(record.caption)}</div>
-      <div class="post-steps" id="pubSteps"></div>
-      <div id="pubResult"></div>`;
+      <div class="post-steps" id="pubSteps" style="display:none"></div>
+      <div id="pubResult"></div>
+      <div id="pubLaunch">
+        <button class="btn btn-success btn-lg" id="pubGo" style="width:100%;justify-content:center">
+          ${App.platformIcon(record.platform)} <span style="margin-left:8px">Post to ${esc(p.name)} now</span>
+        </button>
+        <p class="tiny muted" style="margin-top:10px;margin-bottom:0;text-align:center">
+          Tapping this opens ${esc(p.name)}${record.platform==='whatsapp'||record.platform==='x' ? ' with your post ready to send' : ' so you can finish the post there'} — your caption is copied automatically.
+        </p>
+      </div>`;
     const modal = App.openModal({ title:'Post to social', body });
     const stepsEl = body.querySelector('#pubSteps');
     const resEl = body.querySelector('#pubResult');
+    const launchEl = body.querySelector('#pubLaunch');
 
-    App.social.publish({ platform: record.platform, caption: record.caption, recordId: record.id, handle: connected.handle },
+    function startPublish(){
+      // Called directly from the click so window.open stays inside the
+      // browser's user-gesture window and is not popup-blocked.
+      launchEl.style.display = 'none';
+      stepsEl.style.display = '';
+      App.social.publish({ platform: record.platform, caption: record.caption, recordId: record.id, handle: connected.handle },
       (i, label)=>{
         let row = stepsEl.children[i];
         if(!row){
@@ -651,6 +662,18 @@
         externalId: result.externalId, stats: result.stats, scheduledFor:null
       });
       const canPrefill = (result.platform==='whatsapp' || result.platform==='x');
+      if(result.blocked){
+        // Popup blocker prevented the composer from opening — give a real
+        // link/button the user can tap (a genuine click is never blocked).
+        resEl.innerHTML = `
+          <div class="form-error-banner" style="margin-top:14px">${I.alert}
+            <div>Your browser blocked the pop-up. Tap below to open ${esc(result.platformName)} and finish your post there${canPrefill?' — your caption is pre-filled':' — your caption is copied, just paste it'}.</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+            <a class="btn btn-primary" href="${esc(result.link)}" target="_blank" rel="noopener" style="flex:1">Open ${esc(result.platformName)} ${I.arrowRight}</a>
+            <button class="btn btn-ghost" data-close-modal>Cancel</button>
+          </div>`;
+      }else{
       resEl.innerHTML = `
         <div class="form-success" style="margin-top:14px">
           <span style="color:var(--success);flex:none;margin-top:2px">${I.checkCircle}</span>
@@ -672,11 +695,14 @@
         App.toast(ok?'Caption copied to clipboard':'Copy failed', ok?'success':'error');
       });
       App.toast(`Opening ${result.platformName} — caption ready.`,'success');
+      }
       onDone && onDone();
     }).catch(err=>{
-      resEl.innerHTML = `<div class="form-error-banner" style="display:flex">${I.alert} ${esc(err.message||'Publishing failed. Please retry.')}
-        <button class="btn btn-ghost btn-sm" style="margin-left:auto" data-close-modal>Close</button></div>`;
+      launchEl.style.display = '';
+      resEl.innerHTML = `<div class="form-error-banner" style="display:flex">${I.alert} ${esc(err.message||'Publishing failed. Please retry.')}</div>`;
     });
+    }
+    body.querySelector('#pubGo').addEventListener('click', startPublish);
   }
 
   /* ---------- Connect a social account (authorization flow) ---------- */
