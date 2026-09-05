@@ -295,11 +295,12 @@
                 <p class="muted" style="margin-bottom:0">Andika posts natively to the five platforms Kenyans use every day.
                   You write once — Andika sizes the caption, picks the hashtags and ships it.</p>
               </div>
-              <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
-                ${U.PLATFORMS.map(p=>`<div style="text-align:center">
-                  <span class="plat-dot" style="width:52px;height:52px;border-radius:14px;background:${p.color};margin:0 auto 6px;display:flex;align-items:center;justify-content:center">
-                    <span style="width:26px;height:26px;display:inline-flex">${App.platformIcon(p.id)}</span></span>
-                  <div class="small" style="font-weight:700;font-family:var(--font-display)">${p.name}</div></div>`).join('')}
+              <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+                ${U.PLATFORMS.map(p=>`<div style="display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border);background:#fff;border-radius:var(--r-pill);padding:7px 14px 7px 9px">
+                  <span class="plat-dot" style="width:26px;height:26px;background:${p.color}">
+                    <span style="width:13px;height:13px;display:inline-flex">${App.platformIcon(p.id)}</span></span>
+                  <span class="small" style="font-weight:700;font-family:var(--font-display);color:var(--text)">${p.name}</span>
+                </div>`).join('')}
               </div>
             </div>
           </div>

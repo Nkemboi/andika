@@ -509,6 +509,39 @@ table.data tbody tr:hover{background:var(--primary-tint)}
 .post-step.done{color:var(--text)}
 .post-step .ps-ic svg{width:15px;height:15px}
 
+/* Social accounts connect list (Settings) */
+.social-list{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.social-row{
+  display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:var(--r-md);
+  padding:12px 14px;background:var(--surface-2);transition:border-color .15s,box-shadow .15s;
+}
+.social-row:hover{border-color:var(--border-strong);box-shadow:var(--shadow-xs)}
+.social-ico{
+  width:38px;height:38px;border-radius:10px;flex:none;display:inline-flex;align-items:center;justify-content:center;color:#fff;
+}
+.social-meta{flex:1;min-width:0}
+.social-name{font-family:var(--font-display);font-weight:700;font-size:14px;line-height:1.2}
+.social-handle{font-size:12.5px;color:var(--success);font-weight:600;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.social-handle.off{color:var(--muted-2)}
+.social-handle svg{width:14px;height:14px;flex:none}
+.social-actions{display:flex;gap:6px;flex:none}
+.social-row .btn-sm{min-height:34px;padding:0 12px}
+.conn-dot{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#fff;color:var(--success);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-xs)}
+.conn-dot svg{width:13px;height:13px}
+.plat-choice{position:relative}
+
+/* Publish modal target */
+.publish-target{display:flex;align-items:center;gap:12px;background:var(--surface-2);border-radius:var(--r-md);padding:10px 12px}
+
+/* Footer social — compact icon links */
+.footer-social{display:flex;gap:8px;margin-top:16px}
+.footer-social a{
+  width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.08);color:#dbe6f3;transition:background .15s,transform .15s,color .15s;min-width:34px;
+}
+.footer-social a:hover{background:var(--primary);color:#fff;transform:translateY(-2px)}
+.footer-social a svg{width:16px;height:16px}
+
 /* Settings toggles */
 .toggle{position:relative;display:inline-block;width:46px;height:26px;flex:none}
 .toggle input{opacity:0;width:0;height:0}
@@ -568,6 +601,7 @@ table.data tbody tr:hover{background:var(--primary-tint)}
   .table-scroll{overflow-x:auto}
   table.data{min-width:760px}
   .platform-choice{grid-template-columns:repeat(3,1fr)}
+  .social-list{grid-template-columns:1fr}
 }
 @media (max-width:480px){
   .kpi-grid,.grid-4{grid-template-columns:1fr}

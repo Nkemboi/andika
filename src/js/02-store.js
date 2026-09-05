@@ -44,7 +44,8 @@
         planRenewsAt: null,
         planCancelsAt: null,
         profile: { businessName:'', businessType:'', county:'Nairobi', phone:'', bio:'' },
-        settings: { defaultPlatform:'instagram', defaultTone:'Friendly & warm', weeklyGoal:5, emailDigest:true, plannerReminder:'Monday' }
+        settings: { defaultPlatform:'instagram', defaultTone:'Friendly & warm', weeklyGoal:5, emailDigest:true, plannerReminder:'Monday' },
+        socials: {}
       };
       const users = this.users(); users.push(user); this.saveUsers(users);
       write(KEYS.session, user.id);
@@ -70,7 +71,8 @@
           email, passHash:null, google:true,
           createdAt: new Date().toISOString(), plan:'free', planRenewsAt:null, planCancelsAt:null,
           profile:{ businessName:'', businessType:'', county:'Nairobi', phone:'', bio:'' },
-          settings:{ defaultPlatform:'instagram', defaultTone:'Friendly & warm', weeklyGoal:5, emailDigest:true, plannerReminder:'Monday' }
+          settings:{ defaultPlatform:'instagram', defaultTone:'Friendly & warm', weeklyGoal:5, emailDigest:true, plannerReminder:'Monday' },
+          socials:{}
         };
         const users = this.users(); users.push(user); this.saveUsers(users);
       }
@@ -180,6 +182,40 @@
       if(!u || u.plan!=='pro') return;
       // cancels at end of current period
       this.updateUser({ id:userId, planCancelsAt: u.planRenewsAt || U.monthFromNow() });
+    },
+
+    /* ---------- connected social accounts ---------- */
+    getSocials(userId){
+      const u = this.getUser(userId);
+      return (u && u.socials) || {};
+    },
+    getSocial(userId, platform){
+      const s = this.getSocials(userId);
+      return s[platform] || null;
+    },
+    isConnected(userId, platform){
+      const s = this.getSocial(userId, platform);
+      return !!(s && s.connected);
+    },
+    connectSocial(userId, platform, handle, displayName){
+      const u = this.getUser(userId);
+      const socials = Object.assign({}, u.socials || {});
+      socials[platform] = {
+        connected: true,
+        handle: String(handle||'').replace(/^@+/,''),
+        displayName: displayName || ('@'+String(handle||'').replace(/^@+/,'')),
+        connectedAt: new Date().toISOString()
+      };
+      this.updateUser({ id:userId, socials });
+      return socials[platform];
+    },
+    disconnectSocial(userId, platform){
+      const u = this.getUser(userId);
+      const socials = Object.assign({}, u.socials || {});
+      if(socials[platform]){
+        socials[platform] = { connected:false, handle:'', displayName:'', connectedAt:null };
+        this.updateUser({ id:userId, socials });
+      }
     },
 
     /* ---------- contact messages ---------- */

@@ -392,15 +392,21 @@
   /* ---------- Record create/edit + generator ---------- */
   function openRecordModal(user, existing, onSaved){
     const isEdit = !!existing;
+    const live = App.store.currentUser() || user;
+    const socials = App.store.getSocials(live.id) || {};
     const body = document.createElement('div');
     body.innerHTML = `
       <div class="field">
         <label>Platform *</label>
         <div class="platform-choice" id="platChoice" role="radiogroup" aria-label="Choose platform">
-          ${U.PLATFORMS.map(p=>`
+          ${U.PLATFORMS.map(p=>{
+            const isConn = socials[p.id] && socials[p.id].connected;
+            return `
             <button type="button" class="plat-choice ${(!existing && p.id==='instagram')||(existing&&existing.platform===p.id)?'sel':''}" data-plat="${p.id}" role="radio" aria-checked="${(!existing&&p.id==='instagram')||(existing&&existing.platform===p.id)}">
               <span class="plat-dot" style="background:${p.color}">${App.platformIcon(p.id)}</span>${p.name}
-            </button>`).join('')}
+              ${isConn ? `<span class="conn-dot" title="Connected as ${esc(socials[p.id].displayName)}">${I.checkCircle}</span>` : ''}
+            </button>`;
+          }).join('')}
         </div>
       </div>
       <div class="grid-2">
@@ -501,6 +507,7 @@
   /* ---------- Publish (post to social) ---------- */
   function openPublishModal(user, record, onDone){
     const live = App.store.currentUser() || user;
+    const p = U.platform(record.platform);
     if(live.plan !== 'pro'){
       App.confirm({
         title:'Posting is a Pro feature',
@@ -509,11 +516,29 @@
       }).then(ok=>{ if(ok) location.hash = '#/checkout?plan=pro'; });
       return;
     }
+    if(!App.store.isConnected(live.id, record.platform)){
+      const social = App.store.getSocials(live.id);
+      const anyConnected = U.PLATFORMS.some(x=>social[x.id]&&social[x.id].connected);
+      App.confirm({
+        title:`Connect ${p.name} to post`,
+        message:`Your ${p.name} account isn't connected yet${anyConnected?'.':' — no accounts are connected yet.'} Connect it in Settings, then Andika can publish this post there.`,
+        confirmLabel:'Connect in Settings'
+      }).then(ok=>{ if(ok) location.hash = '#/dashboard/settings'; });
+      return;
+    }
+    const connected = App.store.getSocial(live.id, record.platform);
     const body = document.createElement('div');
     body.innerHTML = `
-      <p class="small muted" style="margin-bottom:12px">Publishing <strong>${esc(record.title)}</strong> to
-        <span class="badge ${record.platform}">${esc(U.platform(record.platform).name)}</span></p>
-      <div class="gen-out" style="margin-bottom:14px;max-height:140px;overflow:auto">${esc(record.caption)}</div>
+      <div class="publish-target">
+        <span class="plat-dot" style="width:34px;height:34px;background:${p.color}">
+          <span style="width:17px;height:17px;display:inline-flex">${App.platformIcon(record.platform)}</span></span>
+        <div style="flex:1">
+          <div class="small muted" style="line-height:1.4">Posting <strong style="color:var(--text)">${esc(record.title)}</strong> to
+            <strong style="color:var(--text)">${p.name}</strong></div>
+          <div class="tiny" style="color:var(--success);font-weight:700">${I.checkCircle} ${esc(connected.displayName)}</div>
+        </div>
+      </div>
+      <div class="gen-out" style="margin:12px 0 14px;max-height:140px;overflow:auto">${esc(record.caption)}</div>
       <div class="post-steps" id="pubSteps"></div>
       <div id="pubResult"></div>`;
     const modal = App.openModal({ title:'Post to social', body });
@@ -563,6 +588,118 @@
     }).catch(err=>{
       resEl.innerHTML = `<div class="form-error-banner" style="display:flex">${I.alert} ${esc(err.message||'Publishing failed. Please retry.')}
         <button class="btn btn-ghost btn-sm" style="margin-left:auto" data-close-modal>Close</button></div>`;
+    });
+  }
+
+  /* ---------- Connect a social account (authorization flow) ---------- */
+  const SOCIAL_FIELD = {
+    facebook:  { label:'Facebook Page name or URL', placeholder:'Glow & Go Salon',
+                 hint:'Use the name of your business Page, e.g. Glow & Go Salon, or paste its URL.' },
+    instagram: { label:'Instagram username', placeholder:'glowandgo.salon',
+                 hint:'Your business handle, with or without the @.' },
+    whatsapp:  { label:'WhatsApp Business number', placeholder:'07XX XXX XXX',
+                 hint:'The Safaricom number that receives your WhatsApp Business chats.' },
+    tiktok:    { label:'TikTok username', placeholder:'glowandgo',
+                 hint:'Your TikTok handle, with or without the @.' },
+    x:         { label:'X (Twitter) username', placeholder:'glowandgo',
+                 hint:'Your X handle, with or without the @.' }
+  };
+
+  function connectSocialFlow(user, platform, onDone){
+    const p = U.platform(platform);
+    const field = SOCIAL_FIELD[platform];
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span class="plat-dot" style="width:44px;height:44px;background:${p.color}">
+          <span style="width:22px;height:22px;display:inline-flex">${App.platformIcon(platform)}</span></span>
+        <div><strong style="font-family:var(--font-display);font-size:16px">Connect ${p.name}</strong><br/>
+        <span class="small muted">Andika will publish posts to this account on your behalf.</span></div>
+      </div>
+      <div id="connectForm">
+        <div class="field">
+          <label for="connHandle">${esc(field.label)}</label>
+          <input class="input" id="connHandle" type="${platform==='whatsapp'?'tel':'text'}"
+            ${platform!=='whatsapp'?'autocapitalize="none" autocomplete="off"':''} placeholder="${esc(field.placeholder)}"/>
+          <div class="hint">${esc(field.hint)}</div>
+          <div class="error-msg" id="connErr"></div>
+        </div>
+        <div class="form-success" style="background:var(--info-soft);border-color:#a5d8e0;color:#0e4b5a">
+          <span style="flex:none;margin-top:2px">${I.users}</span>
+          <span class="small">You'll be asked to approve Andika's request to post to <strong>${p.name}</strong>.
+          We only publish content you explicitly create — never automatically.</span></div>
+      </div>
+      <div id="connectProgress" style="display:none"></div>`;
+
+    const footer = document.createElement('div');
+    footer.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;width:100%';
+    footer.innerHTML = `<button class="btn btn-ghost" data-close-modal>Cancel</button>
+      <button class="btn btn-primary" id="connBtn" style="min-width:180px">Connect ${p.name}</button>`;
+
+    const modal = App.openModal({ title:`Connect ${p.name}`, body, footer });
+
+    modal.el.querySelector('#connBtn').addEventListener('click', async ()=>{
+      const handleEl = modal.el.querySelector('#connHandle');
+      const errEl = modal.el.querySelector('#connErr');
+      let handle = handleEl.value.trim();
+      errEl.classList.remove('show');
+
+      if(platform === 'whatsapp'){
+        const norm = U.normalizeKEPhone(handle);
+        if(!norm){
+          errEl.innerHTML = `${I.alert}<span>Enter a valid Kenyan number, e.g. 0712 345 678.</span>`;
+          errEl.classList.add('show');
+          return;
+        }
+        handle = norm;
+      } else if(handle.length < 2){
+        errEl.innerHTML = `${I.alert}<span>Please enter your ${p.name} ${platform==='facebook'?'Page name':'username'}.</span>`;
+        errEl.classList.add('show');
+        return;
+      }
+
+      const cleanHandle = handle.replace(/^@+/,'').replace(/\/+$/,'');
+      const displayName = platform === 'whatsapp'
+        ? U.mpesaDisplay(cleanHandle)
+        : (cleanHandle.startsWith('http') ? cleanHandle : '@'+cleanHandle);
+
+      // ---- authorization simulation ----
+      modal.el.querySelector('#connectForm').style.display = 'none';
+      const prog = modal.el.querySelector('#connectProgress');
+      prog.style.display = 'block';
+      const steps = [
+        `Opening ${p.name} authorization…`,
+        'Requesting permission to post on your behalf…',
+        `Linking ${p.name} account to Andika…`,
+        'Account connected'
+      ];
+      prog.innerHTML = `
+        <p class="small muted" style="margin-bottom:6px">Follow the prompt on ${p.name} to approve Andika:</p>
+        <div class="post-steps" id="connSteps"></div>`;
+      const list = prog.querySelector('#connSteps');
+      steps.forEach((label, i)=>{
+        const row = document.createElement('div');
+        row.className = 'post-step' + (i===0?' active':'');
+        row.innerHTML = `<span class="ps-ic">${i===0?App.spinner:''}</span><span>${label}</span>`;
+        list.appendChild(row);
+      });
+      for(let i=0;i<steps.length-1;i++){
+        await U.wait(650 + Math.random()*400);
+        const cur = list.children[i], nx = list.children[i+1];
+        cur.classList.remove('active'); cur.classList.add('done');
+        cur.querySelector('.ps-ic').innerHTML = I.check;
+        nx.classList.add('active'); nx.querySelector('.ps-ic').innerHTML = App.spinner;
+      }
+      await U.wait(500);
+      const last = list.children[list.children.length-1];
+      last.classList.remove('active'); last.classList.add('done');
+      last.querySelector('.ps-ic').innerHTML = I.check;
+
+      App.store.connectSocial(user.id, platform, cleanHandle, displayName);
+      await U.wait(350);
+      modal.close();
+      App.toast(`${p.name} connected as ${displayName}`, 'success');
+      onDone && onDone();
     });
   }
 
@@ -898,8 +1035,52 @@
   /* ========================= SETTINGS ========================= */
   function renderSettings(view, user){
     const s = user.settings;
+    const socials = App.store.getSocials(user.id) || {};
+    const connectedCount = U.PLATFORMS.filter(p=>socials[p.id]&&socials[p.id].connected).length;
+
+    function socialRow(p){
+      const conn = socials[p.id] && socials[p.id].connected ? socials[p.id] : null;
+      return `
+        <div class="social-row" data-social="${p.id}">
+          <span class="social-ico" style="background:${p.color}">
+            <span style="width:20px;height:20px;display:inline-flex">${App.platformIcon(p.id)}</span></span>
+          <div class="social-meta">
+            <div class="social-name">${p.name}</div>
+            ${conn
+              ? `<div class="social-handle">${I.checkCircle} <span>${esc(conn.displayName)}</span></div>`
+              : `<div class="social-handle off">Not connected</div>`}
+          </div>
+          ${conn
+            ? `<div class="social-actions">
+                 <button class="btn btn-ghost btn-sm" data-reconnect="${p.id}">Change</button>
+                 <button class="btn btn-danger btn-sm" data-disconnect="${p.id}">Disconnect</button>
+               </div>`
+            : `<button class="btn btn-primary btn-sm" data-connect="${p.id}">${I.plus} Connect</button>`}
+        </div>`;
+    }
+
     view.innerHTML = `
-      <div class="page-head"><div><h1>Settings</h1><p>Preferences that shape your Andika experience.</p></div></div>
+      <div class="page-head"><div><h1>Settings</h1><p>Connect your social accounts and set your preferences.</p></div></div>
+
+      <div class="chart-card" style="margin-bottom:20px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+          <div>
+            <h3 style="margin-bottom:2px">Connected social accounts</h3>
+            <div class="sub">Link a platform so Andika can publish your posts there. ${connectedCount} of ${U.PLATFORMS.length} connected.</div>
+          </div>
+          <span class="badge ${connectedCount===U.PLATFORMS.length?'published':connectedCount?'scheduled':'draft'}" style="align-self:center">
+            ${connectedCount===U.PLATFORMS.length ? 'All connected' : connectedCount ? connectedCount+' connected' : 'None yet'}</span>
+        </div>
+        <div class="social-list">
+          ${U.PLATFORMS.map(socialRow).join('')}
+        </div>
+        <div class="form-success" style="background:var(--info-soft);border-color:#a5d8e0;color:#0e4b5a;margin-top:16px;margin-bottom:0">
+          <span style="flex:none;margin-top:2px">${I.users}</span>
+          <span class="small">Andika only ever posts content <strong>you</strong> create and approve. Connecting an account
+          lets the publisher deliver to it — we never read your DMs or post on your behalf automatically.</span>
+        </div>
+      </div>
+
       <div class="grid-2" style="grid-template-columns:1.1fr .9fr;align-items:start">
         <div class="chart-card">
           <h3>Content defaults</h3>
@@ -942,6 +1123,33 @@
           <p class="small muted" style="margin-top:14px">Preferences are saved to your account on this device.</p>
         </div>
       </div>`;
+
+    const rerender = ()=>renderSettings(view, App.store.currentUser());
+
+    // connect / change
+    view.querySelectorAll('[data-connect],[data-reconnect]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const platform = btn.dataset.connect || btn.dataset.reconnect;
+        connectSocialFlow(App.store.currentUser(), platform, rerender);
+      });
+    });
+    // disconnect
+    view.querySelectorAll('[data-disconnect]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const platform = btn.dataset.disconnect;
+        const p = U.platform(platform);
+        const ok = await App.confirm({
+          title:`Disconnect ${p.name}?`,
+          message:`Andika will no longer be able to publish to your ${p.name} account. Your existing posts are kept. You can reconnect any time.`,
+          confirmLabel:'Disconnect', danger:true
+        });
+        if(ok){
+          App.store.disconnectSocial(user.id, platform);
+          App.toast(`${p.name} disconnected.`,'success');
+          rerender();
+        }
+      });
+    });
 
     U.qs('#sGoal').addEventListener('input', e=>{ U.qs('#goalVal').textContent = e.target.value+' posts'; });
     U.qs('#setForm').addEventListener('submit', e=>{

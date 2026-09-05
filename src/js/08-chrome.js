@@ -97,7 +97,14 @@
               Content that sells, built for Kenyan small businesses. Create captions, post to Facebook,
               Instagram, WhatsApp, TikTok and X — all from one dashboard.
             </p>
-            <p class="footer-tag" style="opacity:.75">Westlands Centre, Westlands Road<br/>Nairobi, Kenya<br/>+254 700 094 254</p>
+            <p class="footer-tag" style="opacity:.75">Westlands Centre, Westlands Road<br/>Nairobi, Kenya · +254 700 094 254</p>
+            <div class="footer-social">
+              <a href="https://www.instagram.com/andika.ke" target="_blank" rel="noopener" aria-label="Andika on Instagram" title="Instagram">${I.instagram}</a>
+              <a href="https://www.tiktok.com/@andika.ke" target="_blank" rel="noopener" aria-label="Andika on TikTok" title="TikTok">${I.tiktok}</a>
+              <a href="https://www.facebook.com/andika.ke" target="_blank" rel="noopener" aria-label="Andika on Facebook" title="Facebook">${I.facebook}</a>
+              <a href="https://x.com/andika_ke" target="_blank" rel="noopener" aria-label="Andika on X" title="X">${I.x}</a>
+              <a href="https://wa.me/254700094254" target="_blank" rel="noopener" aria-label="Andika on WhatsApp" title="WhatsApp">${I.whatsapp}</a>
+            </div>
           </div>
           <div>
             <h5>Product</h5>
