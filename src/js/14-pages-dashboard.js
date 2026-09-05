@@ -650,7 +650,7 @@
         status:'published', publishedAt: result.publishedAt,
         externalId: result.externalId, stats: result.stats, scheduledFor:null
       });
-      const canPrefill = (result.platform==='whatsapp' || result.platform==='x' || result.platform==='facebook');
+      const canPrefill = (result.platform==='whatsapp' || result.platform==='x');
       resEl.innerHTML = `
         <div class="form-success" style="margin-top:14px">
           <span style="color:var(--success);flex:none;margin-top:2px">${I.checkCircle}</span>

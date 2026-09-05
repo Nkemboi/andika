@@ -34,12 +34,14 @@ payments) is persisted in the browser via `localStorage`.
 - Sign out clears the session; data is strictly isolated per account
 
 ### Checkout & billing
-- Free → Pro upgrade through a **PayBridge** checkout client styled as an
-  **M-PESA STK-push** flow (validated Kenyan phone number, live push stages, receipt)
+- Free → Pro upgrade through a **real M-PESA STK-push** flow (Daraja): validated
+  Kenyan phone number, live push stages on screen, and the actual PIN prompt on
+  the customer's phone — see *Real M-PESA payments* below for setup
 - Checkout requires an authenticated user and acceptance of purchase conditions
-- Successful payment activates Pro and is reflected in the dashboard Billing page
-  (plan, price, renewal date, payment history, cancel-at-period-end)
-- The PayBridge module has a clearly marked swap point for a live payment gateway
+- Only a confirmed Daraja success (receipt number) activates Pro; cancellation
+  and timeout are reported honestly and never charge or upgrade the user
+- Payments are reflected in the dashboard Billing page (plan, price, renewal
+  date, payment history, cancel-at-period-end)
 
 ### Dashboard (protected)
 - **Overview** — 4 computed KPI cards + an 8-week trend chart and recent posts
@@ -89,29 +91,73 @@ src/
     15-main.js             # boot
 ```
 
-### Going live with a real backend
-The simulated services are deliberately isolated behind clean interfaces:
-- **Payments** — replace `App.paybridge.requestStkPush` in `04-paybridge.js` with a
-  `fetch()` to your real PayBridge/M-PESA endpoint, keeping the same promise contract.
-- **Google sign-in** — wire `openGoogle()` in `12-pages-auth.js` to Google Identity Services.
-- **Social publishing** — replace `App.social.publish` in `05-social.js` with real
-  platform graph API calls.
-- **Persistence** — swap the `localStorage` functions in `02-store.js` for API calls.
+### Real M-PESA payments (Daraja STK push)
+Payments go through a real Safaricom Daraja integration — **no demo or simulated
+success**. The Node server in `server/server.js` (zero dependencies, Node 18+)
+proxies Daraja so your Consumer Secret never touches the browser:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET  /api/health` | Server up + whether Daraja credentials are configured |
+| `POST /api/stkpush` | Starts the STK push (PIN prompt on the customer's phone) |
+| `GET  /api/stkstatus?checkoutRequestId=…` | Polls Daraja for the payment result |
+| `POST /api/callback` | Receives Daraja's result callback |
+
+Result codes handled: `0` = paid (M-PESA receipt recorded), `1032` = cancelled by
+the customer, `500.001.1001` = still pending (the client polls every 2.5 s for up
+to 2 minutes). If the server is absent or unconfigured the UI shows an honest
+error — it never fakes a successful payment.
+
+**Setup**
+
+```bash
+cp server/.env.example server/.env   # then fill in your Daraja credentials
+npm start                            # = node server/server.js  → http://localhost:8000
+```
+
+1. Create an app at <https://developer.safaricom.co.ke> and copy its **Consumer
+   Key** and **Consumer Secret** into `server/.env`.
+2. Sandbox testing uses the test paybill **174379** and the Lipa na M-PESA
+   sandbox **passkey** (both in the Daraja portal under your app's test
+   credentials). Use sandbox test phone numbers to receive the prompt.
+3. `DARAJA_CALLBACK_URL` must be a **public HTTPS** address Daraja can reach.
+   During local development tunnel with ngrok or cloudflared, e.g.
+   `ngrok http 8000`, then set `DARAJA_CALLBACK_URL=https://<id>.ngrok-free.app/api/callback`.
+4. For real money set `DARAJA_ENV=live` and use your production shortcode/passkey.
+
+### Social posting
+Posts are handed off to the real, connected platform: the caption is copied to the
+clipboard and the platform's composer (web or app deep link) opens pre-addressed to
+the connected handle — WhatsApp (`wa.me`), X (`twitter.com/intent/tweet`),
+Facebook (sharer), Instagram (`instagram.com/<handle>`), and TikTok
+(`tiktok.com/upload`). Instagram and TikTok have no public web-posting API, so
+their app composers are opened directly; Facebook caption prefill requires a
+Facebook app id.
+
+### Still isolated behind clean interfaces
+- **Google sign-in** — wire `openGoogle()` in `12-pages-auth.js` to Google
+  Identity Services.
+- **Persistence** — swap the `localStorage` functions in `02-store.js` for API
+  calls when you add a database.
 
 ## Development
 
 ```bash
-# Run locally
+# Run locally with payments enabled (recommended)
+npm start                        # node server/server.js → http://localhost:8000
+
+# Static-only browsing (M-PESA will show an honest "server not reachable" error)
 python3 -m http.server 8000      # then open http://localhost:8000
 # (or simply double-click index.html)
 
 # Rebuild index.html after editing src/
-./build.sh
+bash build.sh
 ```
 
 ## Notes
-This is a client-side demo: passwords are hashed with a lightweight digest and data
-is stored locally in the browser — it is not intended to hold production secrets.
-Use real authentication and a server-side database for production deployments.
+Data is stored locally in the browser (`localStorage`) and passwords are hashed
+with a lightweight digest — fine for a demo, but use real authentication and a
+server-side database for production. Payment secrets live only in
+`server/.env` (git-ignored), never in client code.
 
 © Andika Ltd. — Made in Nairobi for biashara za Kenya.

@@ -1,0 +1,14 @@
+{
+  "name": "andika",
+  "version": "1.0.0",
+  "description": "Andika — your social storefront, simplified. Content creation platform for Kenyan small businesses, with real M-PESA (Daraja) STK push via a zero-dependency Node server.",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "build": "bash build.sh"
+  },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED",
+  "private": true
+}

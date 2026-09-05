@@ -10,3 +10,7 @@ package-lock.json
 
 # Note: the app is a static single-file build (index.html) with no runtime
 # dependencies. Source lives in src/ and is assembled by build.sh.
+
+# Local secrets (copy from server/.env.example)
+server/.env
+.env

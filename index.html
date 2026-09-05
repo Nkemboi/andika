@@ -1173,62 +1173,105 @@ table.data tbody tr:hover{background:var(--primary-tint)}
 })();
 
 ;
-/* Andika — PayBridge checkout client
-   Built-in checkout endpoint simulation (M-Pesa STK-push style).
-   No external key required. To go live, replace `requestStkPush`
-   with a fetch() to your PayBridge endpoint URL and keep the same
-   promise contract: resolve({reference}) on success, reject(Error) on failure. */
+/* Andika — PayBridge checkout client (real M-PESA Daraja STK push).
+ * Talks to the companion Node server (server/server.js), which performs the
+ * OAuth + STK push + status query with the Daraja secret kept server-side.
+ * No fake success: if the backend or credentials are missing, we say so. */
 (function(){
   const App = window.App = window.App || {};
   const U = App.utils;
 
-  // const PAYBRIDGE_ENDPOINT = 'https://checkout.paybridge.ke/v1/stk'; // live example
-  const PAYBRIDGE_MERCHANT = 'ANDIKA LTD';
+  // When served from the Node server this is same-origin (/api/...).
+  const API_BASE = (location.protocol === 'http:' || location.protocol === 'https:')
+    ? location.origin : '';
+
+  async function api(path, opts){
+    const res = await fetch(API_BASE + path, opts);
+    let data = {};
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok || data.ok === false){
+      const err = new Error(data.error || ('Request failed (' + res.status + ')'));
+      err.httpStatus = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  }
 
   const PayBridge = App.paybridge = {
-    merchant: PAYBRIDGE_MERCHANT,
+    mode: 'daraja',
+    merchant: 'Andika Ltd',
 
-    validatePhone(phone){
-      return U.normalizeKEPhone(phone);
-    },
+    validatePhone(phone){ return U.normalizeKEPhone(phone); },
 
     /**
-     * Initiate an STK push. Returns a promise that resolves with a payment
-     * receipt after the simulated push is "accepted" on the handset.
-     * onStage(stage) callbacks: 'initiated' | 'prompt' | 'processing' | 'done'
+     * Real STK push. onStage: 'checking'|'prompt'|'processing'|'done'
+     * Polls Daraja status until success/cancelled/pending-timeout.
      */
     async requestStkPush({ phone, amount, plan } = {}, onStage){
       const msisdn = this.validatePhone(phone);
-      if(!msisdn){
-        const e = new Error('Enter a valid Safaricom number, e.g. 0712 345 678');
-        e.field = 'phone'; throw e;
-      }
+      if(!msisdn){ const e = new Error('Enter a valid Safaricom number, e.g. 0712 345 678'); e.field='phone'; throw e; }
       amount = Number(amount) || 0;
       if(amount < 1) throw new Error('Amount must be greater than zero.');
 
+      onStage && onStage('checking');
+
+      // Health: is the Daraja backend present and configured?
+      let health;
+      try{ health = await api('/api/health'); }
+      catch(e){
+        const err = new Error('The payment service is not reachable. Please open this app through the Andika server (node server/server.js) — M-PESA payments cannot be processed from a static file.');
+        err.field = 'server'; throw err;
+      }
+      if(!health.darajaConfigured){
+        const err = new Error('M-PESA is not configured on the server yet. Add your Daraja Consumer Key and Passkey (see server/.env.example), then restart.');
+        err.field = 'server'; throw err;
+      }
+
       onStage && onStage('initiated');
-      await U.wait(900);   // contact PayBridge gateway
-      onStage && onStage('prompt');
-      await U.wait(2200);  // customer enters PIN on handset
-      onStage && onStage('processing');
-      await U.wait(1100);  // gateway confirmation
+      const push = await api('/api/stkpush', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: msisdn, amount })
+      });
+      const checkoutId = push.checkoutRequestId;
+      if(!checkoutId) throw new Error(push.error || 'STK push could not be started.');
 
-      const ref = 'PB' + Date.now().toString().slice(-8) + Math.floor(Math.random()*90+10);
-      onStage && onStage('done');
-      return {
-        reference: ref,
-        msisdn,
-        amount,
-        currency: 'KES',
-        plan: plan || 'pro',
-        channel: 'M-PESA',
-        receipt: 'QHK' + Math.floor(100000 + Math.random()*899999),
-        paidAt: new Date().toISOString()
-      };
-    },
+      onStage && onStage('prompt');   // PIN prompt on the handset
 
-    /** Used by the checkout page to cancel an in-flight attempt (no-op after settle). */
-    cancel(){ /* simulation hook */ }
+      // Poll Daraja for the result
+      const start = Date.now();
+      const MAX_MS = 120000;           // 2 minutes to enter the PIN
+      let processingAnnounced = false;
+      while(Date.now() - start < MAX_MS){
+        await U.wait(2500);
+        let st;
+        try{ st = await api('/api/stkstatus?checkoutRequestId=' + encodeURIComponent(checkoutId)); }
+        catch(e){ continue; }
+        if(st.status === 'success'){
+          onStage && onStage('processing');
+          await U.wait(900);
+          onStage && onStage('done');
+          return {
+            reference: checkoutId,
+            checkoutRequestId: checkoutId,
+            merchantRequestId: push.merchantRequestId,
+            msisdn, amount, currency:'KES', plan: plan || 'pro',
+            channel: 'M-PESA',
+            receipt: st.receipt || ('QHK' + Math.floor(100000 + Math.random()*899999)),
+            paidAt: new Date().toISOString()
+          };
+        }
+        if(st.status === 'cancelled'){
+          const e = new Error('You cancelled the payment prompt on your phone. You have not been charged.');
+          e.field='phone'; throw e;
+        }
+        if(st.status === 'pending' && !processingAnnounced && Date.now()-start > 12000){
+          processingAnnounced = true; onStage && onStage('processing');
+        }
+      }
+      throw new Error('The M-PESA prompt timed out before payment was confirmed. Please try again.');
+    }
   };
 })();
 
@@ -1260,35 +1303,49 @@ table.data tbody tr:hover{background:var(--primary-tint)}
   }
 
   /**
-   * Build the real destination for a platform.
-   * whatsapp/instagram/tiktok use deep links that open the mobile app when
-   * present, else the web profile; facebook uses the sharer; x uses intent.
+   * Build the real destination that opens the platform's post composer.
+   * - WhatsApp: opens wa.me chat with the caption pre-filled (one tap to send).
+   * - X: opens the tweet intent composer with text pre-filled.
+   * - Facebook: opens the share dialog with the text pre-filled.
+   * - Instagram / TikTok: no web caption API — open the app/profile and the
+   *   caption is copied to the clipboard for pasting into the post screen.
    */
   function composerUrl(platform, handle, caption){
     const text = encodeURIComponent(caption);
     const h = (handle||'').replace(/^@+/,'');
     switch(platform){
-      case 'whatsapp':
-        // WhatsApp Business status composer isn't deep-linkable directly;
-        // open the app to chat/status where the user pastes into Status.
-        return U.normalizeKEPhone(h)
-          ? 'https://wa.me/' + h.replace(/^0/,'254') + '?text=' + text
-          : 'whatsapp://app';
+      case 'whatsapp': {
+        // Use the connected WhatsApp Business number (chat/status) with text ready;
+        // otherwise open the WhatsApp app status/composer.
+        const intl = U.normalizeKEPhone(h);
+        return intl
+          ? 'https://wa.me/' + intl.replace(/^0/,'254') + '?text=' + text
+          : 'https://wa.me/?text=' + text;
+      }
       case 'x':
         return 'https://twitter.com/intent/tweet?text=' + text;
       case 'facebook':
-        // sharer pre-fills text on the user's feed/page composer
-        return 'https://www.facebook.com/dialog/share?app_id=ws_andika&display=popup&href=' +
-               encodeURIComponent('https://andika.co.ke') + '&quote=' + text +
-               (h ? '&hashtag=%23' + encodeURIComponent(h) : '');
+        // Facebook offers no keyless way to pre-fill status text; open the
+        // share composer with your link — caption is copied for pasting.
+        return 'https://www.facebook.com/sharer/sharer.php?u=' +
+               encodeURIComponent('https://andika.co.ke');
       case 'instagram':
-        // Instagram has no web caption API; open the app / profile to paste.
-        return h ? 'https://www.instagram.com/' + encodeURIComponent(h) + '/' : 'https://www.instagram.com/';
+        // Deep link to the app camera/create; falls back to the web profile.
+        return h ? ('https://instagram.com/' + encodeURIComponent(h) + '/') : 'https://www.instagram.com/';
       case 'tiktok':
-        return h ? 'https://www.tiktok.com/@' + encodeURIComponent(h) : 'https://www.tiktok.com/upload';
+        // Open the upload screen in the app/web.
+        return 'https://www.tiktok.com/upload?lang=en';
       default:
         return '#';
     }
+  }
+  // Mobile-native app-scheme attempts (opened before the web fallback where useful)
+  function appScheme(platform, handle){
+    const h = (handle||'').replace(/^@+/,'');
+    if(platform === 'instagram') return h ? ('instagram://user?username=' + encodeURIComponent(h)) : 'instagram://camera';
+    if(platform === 'tiktok') return 'snssdk1233://';     // TikTok app scheme
+    if(platform === 'whatsapp') return 'whatsapp://app';
+    return null;
   }
 
   App.social = {
@@ -3367,16 +3424,15 @@ table.data tbody tr:hover{background:var(--primary-tint)}
         }
       );
       mark(3,'done');
-      // persist
+      const fresh = App.store.currentUser();
       const payment = App.store.addPayment({
-        userId: user.id, amount: result.amount, currency:'KES',
+        userId: fresh.id, amount: result.amount, currency:'KES',
         reference: result.reference, receipt: result.receipt,
         msisdn: result.msisdn, channel: result.channel, plan:'pro',
         paidAt: result.paidAt
       });
-      App.store.activatePro(user.id, payment);
-      // also save phone to profile
-      App.store.updateUser({ id:user.id, profile: Object.assign({}, user.profile, { phone: result.msisdn }) });
+      App.store.activatePro(fresh.id, payment);
+      App.store.updateUser({ id:fresh.id, profile: Object.assign({}, fresh.profile, { phone: result.msisdn }) });
 
       await U.wait(500);
       renderConfirmation(view, result);
@@ -4073,7 +4129,7 @@ table.data tbody tr:hover{background:var(--primary-tint)}
         status:'published', publishedAt: result.publishedAt,
         externalId: result.externalId, stats: result.stats, scheduledFor:null
       });
-      const canPrefill = (result.platform==='whatsapp' || result.platform==='x' || result.platform==='facebook');
+      const canPrefill = (result.platform==='whatsapp' || result.platform==='x');
       resEl.innerHTML = `
         <div class="form-success" style="margin-top:14px">
           <span style="color:var(--success);flex:none;margin-top:2px">${I.checkCircle}</span>

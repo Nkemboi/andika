@@ -208,16 +208,15 @@
         }
       );
       mark(3,'done');
-      // persist
+      const fresh = App.store.currentUser();
       const payment = App.store.addPayment({
-        userId: user.id, amount: result.amount, currency:'KES',
+        userId: fresh.id, amount: result.amount, currency:'KES',
         reference: result.reference, receipt: result.receipt,
         msisdn: result.msisdn, channel: result.channel, plan:'pro',
         paidAt: result.paidAt
       });
-      App.store.activatePro(user.id, payment);
-      // also save phone to profile
-      App.store.updateUser({ id:user.id, profile: Object.assign({}, user.profile, { phone: result.msisdn }) });
+      App.store.activatePro(fresh.id, payment);
+      App.store.updateUser({ id:fresh.id, profile: Object.assign({}, fresh.profile, { phone: result.msisdn }) });
 
       await U.wait(500);
       renderConfirmation(view, result);

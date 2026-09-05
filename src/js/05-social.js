@@ -25,35 +25,49 @@
   }
 
   /**
-   * Build the real destination for a platform.
-   * whatsapp/instagram/tiktok use deep links that open the mobile app when
-   * present, else the web profile; facebook uses the sharer; x uses intent.
+   * Build the real destination that opens the platform's post composer.
+   * - WhatsApp: opens wa.me chat with the caption pre-filled (one tap to send).
+   * - X: opens the tweet intent composer with text pre-filled.
+   * - Facebook: opens the share dialog with the text pre-filled.
+   * - Instagram / TikTok: no web caption API — open the app/profile and the
+   *   caption is copied to the clipboard for pasting into the post screen.
    */
   function composerUrl(platform, handle, caption){
     const text = encodeURIComponent(caption);
     const h = (handle||'').replace(/^@+/,'');
     switch(platform){
-      case 'whatsapp':
-        // WhatsApp Business status composer isn't deep-linkable directly;
-        // open the app to chat/status where the user pastes into Status.
-        return U.normalizeKEPhone(h)
-          ? 'https://wa.me/' + h.replace(/^0/,'254') + '?text=' + text
-          : 'whatsapp://app';
+      case 'whatsapp': {
+        // Use the connected WhatsApp Business number (chat/status) with text ready;
+        // otherwise open the WhatsApp app status/composer.
+        const intl = U.normalizeKEPhone(h);
+        return intl
+          ? 'https://wa.me/' + intl.replace(/^0/,'254') + '?text=' + text
+          : 'https://wa.me/?text=' + text;
+      }
       case 'x':
         return 'https://twitter.com/intent/tweet?text=' + text;
       case 'facebook':
-        // sharer pre-fills text on the user's feed/page composer
-        return 'https://www.facebook.com/dialog/share?app_id=ws_andika&display=popup&href=' +
-               encodeURIComponent('https://andika.co.ke') + '&quote=' + text +
-               (h ? '&hashtag=%23' + encodeURIComponent(h) : '');
+        // Facebook offers no keyless way to pre-fill status text; open the
+        // share composer with your link — caption is copied for pasting.
+        return 'https://www.facebook.com/sharer/sharer.php?u=' +
+               encodeURIComponent('https://andika.co.ke');
       case 'instagram':
-        // Instagram has no web caption API; open the app / profile to paste.
-        return h ? 'https://www.instagram.com/' + encodeURIComponent(h) + '/' : 'https://www.instagram.com/';
+        // Deep link to the app camera/create; falls back to the web profile.
+        return h ? ('https://instagram.com/' + encodeURIComponent(h) + '/') : 'https://www.instagram.com/';
       case 'tiktok':
-        return h ? 'https://www.tiktok.com/@' + encodeURIComponent(h) : 'https://www.tiktok.com/upload';
+        // Open the upload screen in the app/web.
+        return 'https://www.tiktok.com/upload?lang=en';
       default:
         return '#';
     }
+  }
+  // Mobile-native app-scheme attempts (opened before the web fallback where useful)
+  function appScheme(platform, handle){
+    const h = (handle||'').replace(/^@+/,'');
+    if(platform === 'instagram') return h ? ('instagram://user?username=' + encodeURIComponent(h)) : 'instagram://camera';
+    if(platform === 'tiktok') return 'snssdk1233://';     // TikTok app scheme
+    if(platform === 'whatsapp') return 'whatsapp://app';
+    return null;
   }
 
   App.social = {
