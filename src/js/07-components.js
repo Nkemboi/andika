@@ -54,13 +54,14 @@
   /* ---------------- Brand logo ---------------- */
   App.logo = function(size){
     const s = size || 34;
-    return `<svg class="brand-mark" width="${s}" height="${s}" viewBox="0 0 40 40" aria-hidden="true">
-      <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#2563eb"/><stop offset="1" stop-color="#4f46e5"/>
-      </linearGradient></defs>
-      <rect x="2" y="2" width="36" height="36" rx="10" fill="url(#lg)"/>
-      <path d="M12 26V14l8 7 8-7v12" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`;
+    const src = (App.assets && App.assets.mark) || '';
+    return `<img class="brand-mark" src="${src}" width="${s}" height="${s}" alt="" aria-hidden="true"/>`;
+  };
+  // Full horizontal lockup (mark + wordmark + tagline)
+  App.logoFull = function(width){
+    const w = width || 150;
+    const src = (App.assets && App.assets.logo) || '';
+    return `<img class="brand-lockup" src="${src}" width="${w}" alt="Andika — your social storefront, simplified" style="height:auto;display:block"/>`;
   };
 
   App.platformBadge = function(id){

@@ -626,7 +626,7 @@
     const stepsEl = body.querySelector('#pubSteps');
     const resEl = body.querySelector('#pubResult');
 
-    App.social.publish({ platform: record.platform, caption: record.caption, recordId: record.id },
+    App.social.publish({ platform: record.platform, caption: record.caption, recordId: record.id, handle: connected.handle },
       (i, label)=>{
         let row = stepsEl.children[i];
         if(!row){
@@ -650,22 +650,28 @@
         status:'published', publishedAt: result.publishedAt,
         externalId: result.externalId, stats: result.stats, scheduledFor:null
       });
+      const canPrefill = (result.platform==='whatsapp' || result.platform==='x' || result.platform==='facebook');
       resEl.innerHTML = `
         <div class="form-success" style="margin-top:14px">
           <span style="color:var(--success);flex:none;margin-top:2px">${I.checkCircle}</span>
-          <div><strong>Posted to ${esc(result.platformName)}! 🎉</strong><br/>
-          <span class="small">Estimated reach so far: <strong>${U.fmtNum(result.stats.reach)}</strong> ·
-          <a href="#" id="copyLink" class="small">copy post link</a></span></div>
+          <div>
+            <strong>${esc(result.platformName)} ${canPrefill?'opened with your post ready':'opened'} 🎉</strong><br/>
+            <span class="small">${canPrefill
+              ? 'Your caption is pre-filled — just review and tap post in the new tab. Your caption is also copied if you need it.'
+              : 'Your caption has been copied. In the app that just opened, create a new post and paste it (tap and hold → Paste).'}</span>
+          </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:12px">
-          <button class="btn btn-primary btn-block" data-close-modal>Done</button>
-        </div>`;
-      resEl.querySelector('#copyLink').addEventListener('click', async e=>{
-        e.preventDefault();
-        const ok = await U.copy(result.link);
-        App.toast(ok?'Link copied to clipboard':'Copy failed', ok?'success':'error');
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+          <a class="btn btn-primary" href="${esc(result.link)}" target="_blank" rel="noopener" style="flex:1">Open ${esc(result.platformName)} again ${I.arrowRight}</a>
+          <button class="btn btn-ghost" id="copyCaption">${I.file} Copy caption</button>
+          <button class="btn btn-ghost" data-close-modal>Done</button>
+        </div>
+        <p class="tiny muted" style="margin-top:10px;margin-bottom:0">Marked as published on your dashboard · estimated initial reach <strong>${U.fmtNum(result.stats.reach)}</strong>.</p>`;
+      resEl.querySelector('#copyCaption').addEventListener('click', async ()=>{
+        const ok = await U.copy(record.caption);
+        App.toast(ok?'Caption copied to clipboard':'Copy failed', ok?'success':'error');
       });
-      App.toast(`Published to ${result.platformName}!`,'success');
+      App.toast(`Opening ${result.platformName} — caption ready.`,'success');
       onDone && onDone();
     }).catch(err=>{
       resEl.innerHTML = `<div class="form-error-banner" style="display:flex">${I.alert} ${esc(err.message||'Publishing failed. Please retry.')}

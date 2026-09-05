@@ -10,8 +10,10 @@
   async function publishDueRecord(user, record){
     inFlight.add(record.id);
     try{
+      const social = App.store.getSocial(user.id, record.platform);
       const result = await App.social.publish({
-        platform: record.platform, caption: record.caption, recordId: record.id
+        platform: record.platform, caption: record.caption, recordId: record.id,
+        handle: social ? social.handle : ''
       }, function(){ /* silent background progress */ });
       App.store.updateRecord(record.id, user.id, {
         status:'published',

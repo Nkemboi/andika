@@ -92,7 +92,9 @@
       <div class="container">
         <div class="footer-grid">
           <div>
-            <a class="brand" href="#/">${App.logo(30)}<span style="color:#fff">Andika</span></a>
+            <a class="brand" href="#/" aria-label="Andika home" style="margin-bottom:6px">
+              <span class="footer-lockup">${App.logoFull(168)}</span>
+            </a>
             <p class="footer-tag" style="margin-top:14px">
               Content that sells, built for Kenyan small businesses. Create captions, post to Facebook,
               Instagram, WhatsApp, TikTok and X — all from one dashboard.
